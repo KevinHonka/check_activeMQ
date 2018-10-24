@@ -236,3 +236,6 @@ if __name__ == '__main__':
         check.get_queue_status(args.broker, args.queue, args.warn, args.crit)
     elif args.command == 'health':
         check.get_health_status(args.broker)
+    else:
+        print("invalid call! not enough parameters")
+        sys.exit(1)
