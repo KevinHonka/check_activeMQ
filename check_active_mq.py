@@ -2,14 +2,12 @@
 # -*- coding: utf-8 -*-
 import argparse
 import json
-from pprint import pprint
+import logging
+import sys
+from enum import Enum
 from types import SimpleNamespace
 
 import requests
-import sys
-
-from enum import Enum
-import logging
 from requests import RequestException, ConnectionError, URLRequired, TooManyRedirects, Timeout
 
 
@@ -74,21 +72,49 @@ class CheckApacheMQ(object):
 
         data = self.query_amq(self.host + amq_path, auth=(self.user, self.password))
 
-        return_String = "Apache-MQ - OK "
-        return_String += " Uptime: %s \n" % data['value']['Uptime']
-        return_String += " BrokerVersion: %s \n" % data['value']['BrokerVersion']
-        return_String += " Store Usage: %s \n" % data['value']['StorePercentUsage']
-        return_String += " Memory Usage: %s \n" % data['value']['MemoryPercentUsage']
-        return_String += " Total Connections: %s \n" % data['value']['TotalConnectionsCount']
-        return_String += " Total Dequeue Count: %s \n" % data['value']['TotalDequeueCount']
-        return_String += " Total Enqueue Count: %s \n" % data['value']['TotalEnqueueCount']
+        return_data = {
+            "Uptime": data['value']['Uptime'],
+            "BrokerVersion": data['value']['BrokerVersion'],
+            "Store Usage in %": data['value']['StorePercentUsage'],
+            "Memory Usage in %": data['value']['MemoryPercentUsage'],
+            "Total Connections": data['value']['TotalConnectionsCount'],
+            "Total Dequeue Count": data['value']['TotalDequeueCount'],
+            "Total Enqueue Count": data['value']['TotalEnqueueCount']
+        }
 
-        return_String += "|"
-        return_String += " {}={};{};{};{};{}".format("Store Usage", data['value']['StorePercentUsage'], "", "", "", 100)
-        return_String += " {}={};{};{};{};{}".format("Memory Usage", data['value']['MemoryPercentUsage'], "", "", "",
-                                                     100)
+        perfdata_values = {
+            "Store Usage": SimpleNamespace(value=data['value']['StorePercentUsage'],
+                                           warn="",
+                                           crit="",
+                                           min="",
+                                           max=100),
+            "Memory Usage": SimpleNamespace(value=data['value']['MemoryPercentUsage'],
+                                            warn="",
+                                            crit="",
+                                            min="",
+                                            max=100),
+            "Uptime": SimpleNamespace(value=data['value']['Uptime'],
+                                      warn="",
+                                      crit="",
+                                      min="",
+                                      max=""),
+            "Total Dequeue Count": SimpleNamespace(value=data['value']['TotalDequeueCount'],
+                                                   warn="",
+                                                   crit="",
+                                                   min="",
+                                                   max=""),
+            "Total Enqueue Count": SimpleNamespace(value=data['value']['TotalEnqueueCount'],
+                                                   warn="",
+                                                   crit="",
+                                                   min="",
+                                                   max=""),
+        }
 
-        self.log.info(return_String)
+        return_string = self.build_string(return_data)
+
+        return_string += self.build_perfdata(perfdata_values)
+
+        self.log.info(return_string)
         sys.exit(self.ExitCode.OK.value)
 
     def get_queue_status(self, broker_name, queue_name, warn=None, crit=None):
@@ -109,11 +135,21 @@ class CheckApacheMQ(object):
         }
 
         perfdata_values = {
-            "Store Usage": SimpleNamespace(value=data['value']['MemoryUsageByteCount'],
-                                           warn="",
-                                           crit="",
-                                           min="",
-                                           max=data['value']['MemoryLimit'])
+            "Memory Usage": SimpleNamespace(value=data['value']['MemoryUsageByteCount'],
+                                            warn="",
+                                            crit="",
+                                            min="",
+                                            max=data['value']['MemoryLimit']),
+            "Queue Size": SimpleNamespace(value=data['value']['Queuesize'],
+                                          warn=warn,
+                                          crit=crit,
+                                          min="",
+                                          max=""),
+            "Message Size": SimpleNamespace(value=data['value']['AverageMessageSize'],
+                                            warn="",
+                                            crit="",
+                                            min=data['value']['MinMessageSize'],
+                                            max=data['value']['MaxMessageSize']),
         }
 
         # checking if Queue size exceeds warn or crit values
@@ -124,7 +160,7 @@ class CheckApacheMQ(object):
             return_string_begin = "Apache-MQ - WARNING "
             exitcode = self.ExitCode.WARNING.value
         else:
-            return_string_begin = "Apache-MQ - OK "
+            return_string_begin = "Apache-MQ - OK \n"
 
         return_string = self.build_string(return_data, return_string_begin)
 
@@ -142,7 +178,7 @@ class CheckApacheMQ(object):
 
         return perfdata_string
 
-    def build_string(self, string_values, string_begin="Apache-MQ - OK "):
+    def build_string(self, string_values, string_begin="Apache-MQ - OK \n"):
         return_string = string_begin
 
         for key, value in string_values.items():
@@ -197,5 +233,4 @@ if __name__ == '__main__':
     if args.command == 'queue':
         check.get_queue_status(args.broker, args.queue, args.warn, args.crit)
     elif args.command == 'health':
-        check.get_stats()
-        check.print_status()
+        check.get_health_status()
