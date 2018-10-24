@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 # -*- coding: utf-8 -*-
 import argparse
 import json
@@ -85,17 +85,23 @@ class CheckApacheMQ(object):
 
         return_String += "|"
         return_String += " {}={};{};{};{};{}".format("Store Usage", data['value']['StorePercentUsage'], "", "", "", 100)
-        return_String += " {}={};{};{};{};{}".format("Memory Usage", data['value']['MemoryPercentUsage'], "", "", "", 100)
+        return_String += " {}={};{};{};{};{}".format("Memory Usage", data['value']['MemoryPercentUsage'], "", "", "",
+                                                     100)
 
         self.log.info(return_String)
         sys.exit(self.ExitCode.OK.value)
 
-    def get_queue_status(self, broker_name, queue_name):
+    def get_queue_status(self, broker_name, queue_name, warn=None, crit=None):
 
-        amq_path = "read/org.apache.activemq:type=Broker,brokerName={},destinationType=Queue,destinationName={}".format(broker_name, queue_name)
+        exitcode = self.ExitCode.OK.value
 
+        amq_path = "read/org.apache.activemq:type=Broker,brokerName={},destinationType=Queue,destinationName={}".format(
+            broker_name, queue_name)
+
+        # Query values from activeMQ
         data = self.query_amq(self.host + amq_path, auth=(self.user, self.password))
 
+        # Building dicts to better build strings
         return_data = {
             'Queue Size': data['value']['QueueSize'],
             'Producer count': data['value']['ProducerCount'],
@@ -110,18 +116,29 @@ class CheckApacheMQ(object):
                                            max=data['value']['MemoryLimit'])
         }
 
-        return_String = self.build_string(return_data)
+        # checking if Queue size exceeds warn or crit values
+        if crit and crit < data['value']['QueueSize']:
+            return_string_begin = "Apache-MQ - CRITICAL "
+            exitcode = self.ExitCode.CRITICAL.value
+        elif warn and warn < data['value']['QueueSize']:
+            return_string_begin = "Apache-MQ - WARNING "
+            exitcode = self.ExitCode.WARNING.value
+        else:
+            return_string_begin = "Apache-MQ - OK "
 
-        return_String += self.build_perfdata(perfdata_values)
+        return_string = self.build_string(return_data, return_string_begin)
 
-        self.log.info(return_String)
-        sys.exit(self.ExitCode.OK.value)
+        return_string += self.build_perfdata(perfdata_values)
+
+        self.log.info(return_string)
+        sys.exit(exitcode)
 
     def build_perfdata(self, perfdata_values):
         perfdata_string = " |"
 
         for key, values in perfdata_values.items():
-            perfdata_string += " {}={};{};{};{};{}".format(key, values.value, values.warn, values.crit, values.min, values.max)
+            perfdata_string += " {}={};{};{};{};{}".format(key, values.value, values.warn, values.crit, values.min,
+                                                           values.max)
 
         return perfdata_string
 
@@ -139,7 +156,6 @@ class CheckApacheMQ(object):
             req.raise_for_status()
             data = json.loads(req.text)
 
-            pprint(data)
             return data
 
         except (RequestException, ConnectionError, URLRequired, TooManyRedirects, Timeout) as ex:
@@ -154,15 +170,19 @@ if __name__ == '__main__':
         formatter_class=argparse.RawTextHelpFormatter
     )
 
-    parser.add_argument('--host', default='http://localhost:8161/api/jolokia/', help='Host of the Apache-MQ REST service')
+    parser.add_argument('--host', default='http://localhost:8161/api/jolokia/',
+                        help='Host of the Apache-MQ REST service')
     parser.add_argument('-u', '--username', default='admin', help='Username to be used to login')
     parser.add_argument('-p', '--password', default='admin', help='Password to be used to login')
 
     subparsers = parser.add_subparsers(dest='command')
 
     queueu_parser = subparsers.add_parser('queue')
-    queueu_parser.add_argument('-b', '--broker', default='localhost', help='Brokername used to determine which broker to check. \n Defaults to localhost')
+    queueu_parser.add_argument('-b', '--broker', default='localhost',
+                               help='Brokername used to determine which broker to check. \n Defaults to localhost')
     queueu_parser.add_argument('-q', '--queue', required=True, help='Queuename which is needed')
+    queueu_parser.add_argument('-c', '--crit', default=500, help='Critical Value for the Queuesize')
+    queueu_parser.add_argument('-w', '--warn', default=250, help='Warning Value for the Queuesize')
 
     health_parser = subparsers.add_parser('health')
 
@@ -175,7 +195,7 @@ if __name__ == '__main__':
     print(args.command)
 
     if args.command == 'queue':
-        check.get_queue_status(args.broker, args.queue)
+        check.get_queue_status(args.broker, args.queue, args.warn, args.crit)
     elif args.command == 'health':
         check.get_stats()
         check.print_status()
