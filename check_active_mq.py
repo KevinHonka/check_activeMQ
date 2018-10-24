@@ -140,7 +140,7 @@ class CheckApacheMQ(object):
                                             crit="",
                                             min="",
                                             max=data['value']['MemoryLimit']),
-            "Queue Size": SimpleNamespace(value=data['value']['Queuesize'],
+            "Queue Size": SimpleNamespace(value=data['value']['QueueSize'],
                                           warn=warn,
                                           crit=crit,
                                           min="",
