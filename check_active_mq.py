@@ -66,9 +66,9 @@ class CheckApacheMQ(object):
         self.log.addHandler(streamhandler)
         self.log.setLevel(logging.INFO)
 
-    def get_health_status(self):
+    def get_health_status(self, broker_name):
 
-        amq_path = "read/org.apache.activemq:type=Broker,brokerName=localhost"
+        amq_path = "read/org.apache.activemq:type=Broker,brokerName={}".format(broker_name)
 
         data = self.query_amq(self.host + amq_path, auth=(self.user, self.password))
 
@@ -221,6 +221,8 @@ if __name__ == '__main__':
     queueu_parser.add_argument('-w', '--warn', default=250, help='Warning Value for the Queuesize')
 
     health_parser = subparsers.add_parser('health')
+    health_parser.add_argument('-b', '--broker', default='localhost',
+                               help='Brokername used to determine which broker to check. \n Defaults to localhost')
 
     args = parser.parse_args()
 
@@ -233,4 +235,4 @@ if __name__ == '__main__':
     if args.command == 'queue':
         check.get_queue_status(args.broker, args.queue, args.warn, args.crit)
     elif args.command == 'health':
-        check.get_health_status()
+        check.get_health_status(args.broker)

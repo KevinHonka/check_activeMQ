@@ -32,3 +32,12 @@ optional arguments:
   -c CRIT, --crit CRIT  Critical Value for the Queuesize
   
   -w WARN, --warn WARN  Warning Value for the Queuesize
+
+### Health
+usage: check_active_mq.py health [-h] [-b BROKER]
+
+optional arguments:
+
+  -h, --help            show this help message and exit
+  
+  -b BROKER, --broker BROKER Brokername used to determine which broker to check. Defaults to localhost
