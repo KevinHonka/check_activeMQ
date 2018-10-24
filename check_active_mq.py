@@ -230,8 +230,6 @@ if __name__ == '__main__':
     check.password = args.password
     check.host = args.host
 
-    print(args.command)
-
     if args.command == 'queue':
         check.get_queue_status(args.broker, args.queue, args.warn, args.crit)
     elif args.command == 'health':
