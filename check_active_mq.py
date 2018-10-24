@@ -3,7 +3,7 @@
 import argparse
 import json
 from pprint import pprint
-from urllib2 import HTTPError
+from types import SimpleNamespace
 
 import requests
 import sys
@@ -68,32 +68,24 @@ class CheckApacheMQ(object):
         self.log.addHandler(streamhandler)
         self.log.setLevel(logging.INFO)
 
-    def get_stats(self):
+    def get_health_status(self):
 
         amq_path = "read/org.apache.activemq:type=Broker,brokerName=localhost"
 
-        try:
-            req = requests.get(self.host + amq_path, auth=(self.user, self.password))
-            req.raise_for_status()
-            self.data = json.loads(req.text)
+        data = self.query_amq(self.host + amq_path, auth=(self.user, self.password))
 
-        except (RequestException, ConnectionError, HTTPError, URLRequired, TooManyRedirects, Timeout) as ex:
-            self.log.error("Apache-MQ - CRITICAL {}".format(ex.message))
-            sys.exit(self.ExitCode.CRITICAL.value)
-
-    def print_status(self):
         return_String = "Apache-MQ - OK "
-        return_String += " Uptime: %s \n" % self.data['value']['Uptime']
-        return_String += " BrokerVersion: %s \n" % self.data['value']['BrokerVersion']
-        return_String += " Store Usage: %s \n" % self.data['value']['StorePercentUsage']
-        return_String += " Memory Usage: %s \n" % self.data['value']['MemoryPercentUsage']
-        return_String += " Total Connections: %s \n" % self.data['value']['TotalConnectionsCount']
-        return_String += " Total Dequeue Count: %s \n" % self.data['value']['TotalDequeueCount']
-        return_String += " Total Enqueue Count: %s \n" % self.data['value']['TotalEnqueueCount']
+        return_String += " Uptime: %s \n" % data['value']['Uptime']
+        return_String += " BrokerVersion: %s \n" % data['value']['BrokerVersion']
+        return_String += " Store Usage: %s \n" % data['value']['StorePercentUsage']
+        return_String += " Memory Usage: %s \n" % data['value']['MemoryPercentUsage']
+        return_String += " Total Connections: %s \n" % data['value']['TotalConnectionsCount']
+        return_String += " Total Dequeue Count: %s \n" % data['value']['TotalDequeueCount']
+        return_String += " Total Enqueue Count: %s \n" % data['value']['TotalEnqueueCount']
 
         return_String += "|"
-        return_String += " {}={};{};{};{};{}".format("Store Usage", self.data['value']['StorePercentUsage'], "", "", "", 100)
-        return_String += " {}={};{};{};{};{}".format("Memory Usage", self.data['value']['MemoryPercentUsage'], "", "", "", 100)
+        return_String += " {}={};{};{};{};{}".format("Store Usage", data['value']['StorePercentUsage'], "", "", "", 100)
+        return_String += " {}={};{};{};{};{}".format("Memory Usage", data['value']['MemoryPercentUsage'], "", "", "", 100)
 
         self.log.info(return_String)
         sys.exit(self.ExitCode.OK.value)
@@ -102,14 +94,55 @@ class CheckApacheMQ(object):
 
         amq_path = "read/org.apache.activemq:type=Broker,brokerName={},destinationType=Queue,destinationName={}".format(broker_name, queue_name)
 
+        data = self.query_amq(self.host + amq_path, auth=(self.user, self.password))
+
+        return_data = {
+            'Queue Size': data['value']['QueueSize'],
+            'Producer count': data['value']['ProducerCount'],
+            'Memory Usage': data['value']['MemoryPercentUsage'],
+        }
+
+        perfdata_values = {
+            "Store Usage": SimpleNamespace(value=data['value']['MemoryUsageByteCount'],
+                                           warn="",
+                                           crit="",
+                                           min="",
+                                           max=data['value']['MemoryLimit'])
+        }
+
+        return_String = self.build_string(return_data)
+
+        return_String += self.build_perfdata(perfdata_values)
+
+        self.log.info(return_String)
+        sys.exit(self.ExitCode.OK.value)
+
+    def build_perfdata(self, perfdata_values):
+        perfdata_string = " |"
+
+        for key, values in perfdata_values.items():
+            perfdata_string += " {}={};{};{};{};{}".format(key, values.value, values.warn, values.crit, values.min, values.max)
+
+        return perfdata_string
+
+    def build_string(self, string_values, string_begin="Apache-MQ - OK "):
+        return_string = string_begin
+
+        for key, value in string_values.items():
+            return_string += " {}: {} \n".format(key, value)
+
+        return return_string
+
+    def query_amq(self, url, auth):
         try:
-            req = requests.get(self.host + amq_path, auth=(self.user, self.password))
+            req = requests.get(url, auth=auth)
             req.raise_for_status()
-            self.data = json.loads(req.text)
+            data = json.loads(req.text)
 
-            pprint(self.data)
+            pprint(data)
+            return data
 
-        except (RequestException, ConnectionError, HTTPError, URLRequired, TooManyRedirects, Timeout) as ex:
+        except (RequestException, ConnectionError, URLRequired, TooManyRedirects, Timeout) as ex:
             self.log.error("Apache-MQ - CRITICAL {}".format(ex.message))
             sys.exit(self.ExitCode.CRITICAL.value)
 
@@ -130,6 +163,7 @@ if __name__ == '__main__':
     queueu_parser = subparsers.add_parser('queue')
     queueu_parser.add_argument('-b', '--broker', default='localhost', help='Brokername used to determine which broker to check. \n Defaults to localhost')
     queueu_parser.add_argument('-q', '--queue', required=True, help='Queuename which is needed')
+
     health_parser = subparsers.add_parser('health')
 
     args = parser.parse_args()
