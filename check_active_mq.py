@@ -153,10 +153,10 @@ class CheckApacheMQ(object):
         }
 
         # checking if Queue size exceeds warn or crit values
-        if crit and crit < int(data['value']['QueueSize']):
+        if crit and crit < data['value']['QueueSize']:
             return_string_begin = "Apache-MQ - CRITICAL "
             exitcode = self.ExitCode.CRITICAL.value
-        elif warn and warn < int(data['value']['QueueSize']):
+        elif warn and warn < data['value']['QueueSize']:
             return_string_begin = "Apache-MQ - WARNING "
             exitcode = self.ExitCode.WARNING.value
         else:
@@ -217,8 +217,8 @@ if __name__ == '__main__':
     queueu_parser.add_argument('-b', '--broker', default='localhost',
                                help='Brokername used to determine which broker to check. \n Defaults to localhost')
     queueu_parser.add_argument('-q', '--queue', required=True, help='Queuename which is needed')
-    queueu_parser.add_argument('-c', '--crit', default=500, help='Critical Value for the Queuesize')
-    queueu_parser.add_argument('-w', '--warn', default=250, help='Warning Value for the Queuesize')
+    queueu_parser.add_argument('-c', '--crit', type=int, default=500, help='Critical Value for the Queuesize')
+    queueu_parser.add_argument('-w', '--warn', type=int, default=250, help='Warning Value for the Queuesize')
 
     health_parser = subparsers.add_parser('health')
     health_parser.add_argument('-b', '--broker', default='localhost',
