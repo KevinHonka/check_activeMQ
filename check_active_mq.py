@@ -153,10 +153,10 @@ class CheckApacheMQ(object):
         }
 
         # checking if Queue size exceeds warn or crit values
-        if crit and crit < data['value']['QueueSize']:
+        if crit and crit < int(data['value']['QueueSize']):
             return_string_begin = "Apache-MQ - CRITICAL "
             exitcode = self.ExitCode.CRITICAL.value
-        elif warn and warn < data['value']['QueueSize']:
+        elif warn and warn < int(data['value']['QueueSize']):
             return_string_begin = "Apache-MQ - WARNING "
             exitcode = self.ExitCode.WARNING.value
         else:
