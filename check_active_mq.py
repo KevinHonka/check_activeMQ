@@ -6,6 +6,7 @@ import logging
 import sys
 from enum import Enum
 from types import SimpleNamespace
+from urllib.parse import urlparse
 
 import requests
 from requests import RequestException, ConnectionError, URLRequired, TooManyRedirects, Timeout
@@ -22,6 +23,68 @@ class CheckApacheMQ(object):
         WARNING = 1
         CRITICAL = 2
         UNKNOWN = 3
+
+    class URL:
+
+        @property
+        def host(self):
+            return self.__host
+
+        @host.setter
+        def host(self, host):
+            if host is not None:
+                self.__host = host
+            else:
+                raise ValueError()
+
+        @property
+        def port(self):
+            return self.__port
+
+        @port.setter
+        def port(self, port):
+            if port is not None:
+                self.__port = port
+            else:
+                raise ValueError()
+
+        @property
+        def schema(self):
+            return self.__schema
+
+        @schema.setter
+        def schema(self, schema):
+            if schema is not None:
+                self.__schema = schema
+            else:
+                raise ValueError()
+
+        @property
+        def uri(self):
+            return self.__uri
+
+        @uri.setter
+        def uri(self, uri):
+            if uri is not None:
+                self.__uri = uri
+            else:
+                raise ValueError()
+
+        def __init__(self):
+            self.__host = None
+            self.__port = None
+            self.__schema = None
+            self.__uri = None
+
+        def get_url(self):
+
+            build_url = "{}://{}:{}{}".format(self.schema, self.host, self.port, self.uri)
+
+            try:
+                urlparse(build_url)
+                return build_url
+            except ValueError as error:
+                raise ValueError("Error while checking if URL works. {}".format(build_url)) from error
 
     @property
     def user(self):
@@ -45,21 +108,12 @@ class CheckApacheMQ(object):
         else:
             raise ValueError()
 
-    @property
-    def host(self):
-        return self.__host
-
-    @host.setter
-    def host(self, host):
-        if host is not None:
-            self.__host = host
-        else:
-            raise ValueError()
-
     def __init__(self, ):
         self.__url = None
         self.__user = None
         self.__password = None
+
+        self.url = self.URL()
 
         self.log = logging.getLogger('CheckApacheMQ')
         streamhandler = logging.StreamHandler(sys.stdout)
@@ -70,7 +124,7 @@ class CheckApacheMQ(object):
 
         amq_path = "read/org.apache.activemq:type=Broker,brokerName={}".format(broker_name)
 
-        data = self.query_amq(self.host + amq_path, auth=(self.user, self.password))
+        data = self.query_amq(self.url.get_url() + amq_path, auth=(self.user, self.password))
 
         return_data = {
             "Uptime": data['value']['Uptime'],
@@ -125,7 +179,7 @@ class CheckApacheMQ(object):
             broker_name, queue_name)
 
         # Query values from activeMQ
-        data = self.query_amq(self.host + amq_path, auth=(self.user, self.password))
+        data = self.query_amq(self.url.get_url() + amq_path, auth=(self.user, self.password))
 
         # Building dicts to better build strings
         return_data = {
@@ -206,8 +260,19 @@ if __name__ == '__main__':
         formatter_class=argparse.RawTextHelpFormatter
     )
 
-    parser.add_argument('--host', default='http://localhost:8161/api/jolokia/',
+    parser.add_argument('--host',
+                        default='localhost',
                         help='Host of the Apache-MQ REST service')
+    parser.add_argument('--port',
+                        default='8161',
+                        help='Port of the Apache-MQ REST service')
+    parser.add_argument('--uri',
+                        default='/api/jolokia/',
+                        help='URI of the Apache-MQ REST service')
+    parser.add_argument('--ssl',
+                        action='store_true',
+                        default=False,
+                        help="Flag to switch between https and http. Defaults to http")
     parser.add_argument('-u', '--username', default='admin', help='Username to be used to login')
     parser.add_argument('-p', '--password', default='admin', help='Password to be used to login')
 
@@ -228,7 +293,14 @@ if __name__ == '__main__':
 
     check.user = args.username
     check.password = args.password
-    check.host = args.host
+    check.url.host = args.host
+    check.url.port = args.port
+    check.url.uri = args.uri
+
+    if args.ssl:
+        check.url.schema = 'https'
+    else:
+        check.url.schema = 'http'
 
     if args.command == 'queue':
         check.get_queue_status(args.broker, args.queue, args.warn, args.crit)
