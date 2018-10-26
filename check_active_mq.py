@@ -60,13 +60,13 @@ class CheckApacheMQ(object):
                 raise ValueError()
 
         @property
-        def uri(self):
-            return self.__uri
+        def path(self):
+            return self.__path
 
-        @uri.setter
-        def uri(self, uri):
-            if uri is not None:
-                self.__uri = uri
+        @path.setter
+        def path(self, path):
+            if path is not None:
+                self.__path = path
             else:
                 raise ValueError()
 
@@ -74,11 +74,11 @@ class CheckApacheMQ(object):
             self.__host = None
             self.__port = None
             self.__schema = None
-            self.__uri = None
+            self.__path = None
 
         def get_url(self):
 
-            build_url = "{}://{}:{}{}".format(self.schema, self.host, self.port, self.uri)
+            build_url = "{}://{}:{}{}".format(self.schema, self.host, self.port, self.path)
 
             try:
                 urlparse(build_url)
@@ -266,7 +266,7 @@ if __name__ == '__main__':
     parser.add_argument('--port',
                         default='8161',
                         help='Port of the Apache-MQ REST service')
-    parser.add_argument('--uri',
+    parser.add_argument('--path',
                         default='/api/jolokia/',
                         help='URI of the Apache-MQ REST service')
     parser.add_argument('--ssl',
@@ -295,7 +295,7 @@ if __name__ == '__main__':
     check.password = args.password
     check.url.host = args.host
     check.url.port = args.port
-    check.url.uri = args.uri
+    check.url.path = args.path
 
     if args.ssl:
         check.url.schema = 'https'
