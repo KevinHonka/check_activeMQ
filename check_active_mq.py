@@ -248,8 +248,20 @@ class CheckApacheMQ(object):
 
             return data
 
-        except (RequestException, ConnectionError, URLRequired, TooManyRedirects, Timeout) as ex:
-            self.log.error("Apache-MQ - CRITICAL {}".format(ex.message))
+        except RequestException as ex:
+            self.log.error("Apache-MQ - CRITICAL \n Could not complete request \n {}".format(ex.message))
+            sys.exit(self.ExitCode.CRITICAL.value)
+
+        except ConnectionError as ex:
+            self.log.error("Apache-MQ - CRITICAL \n Could not connect to service \n {}".format(ex.message))
+            sys.exit(self.ExitCode.CRITICAL.value)
+
+        except TooManyRedirects as ex:
+            self.log.error("Apache-MQ - CRITICAL \n Too many Redirects \n {}".format(ex.message))
+            sys.exit(self.ExitCode.CRITICAL.value)
+
+        except Timeout as ex:
+            self.log.error("Apache-MQ - CRITICAL \ Connection timeout \n {}".format(ex.message))
             sys.exit(self.ExitCode.CRITICAL.value)
 
 
