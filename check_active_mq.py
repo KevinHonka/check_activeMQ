@@ -9,7 +9,9 @@ from types import SimpleNamespace
 
 import requests
 from requests import RequestException, ConnectionError, URLRequired, TooManyRedirects, Timeout
+import pprint
 
+pp = pprint.PrettyPrinter(indent=2)
 
 class CheckApacheMQ(object):
     """docstring for Check_Apache_MQ."""
@@ -46,8 +48,16 @@ class CheckApacheMQ(object):
             raise ValueError()
 
     @property
+    def url(self):
+        return self.__url
+
+    @property
     def host(self):
         return self.__host
+
+    @property
+    def port(self):
+        return self.__port
 
     @host.setter
     def host(self, host):
@@ -56,8 +66,17 @@ class CheckApacheMQ(object):
         else:
             raise ValueError()
 
+    @port.setter
+    def port(self, port):
+        if port is not None:
+            self.__port = port
+        else:
+            raise ValueError()
+
     def __init__(self, ):
-        self.__url = None
+        self.__url  = None
+        self.__host = None
+        self.__port = None
         self.__user = None
         self.__password = None
 
@@ -67,10 +86,18 @@ class CheckApacheMQ(object):
         self.log.setLevel(logging.INFO)
 
     def get_health_status(self, broker_name):
+        """
+        """
+        url = "http://{host:}:{port:}/api/jolokia".format(host=self.host, port=self.port)
 
-        amq_path = "read/org.apache.activemq:type=Broker,brokerName={}".format(broker_name)
+        amq_path = "/read/org.apache.activemq:type=Broker,brokerName={}".format(broker_name)
 
-        data = self.query_amq(self.host + amq_path, auth=(self.user, self.password))
+        data = self.query_amq(url + amq_path, auth=(self.user, self.password))
+
+        if( len(data) == 0 ):
+            sys.exit(self.ExitCode.UNKNOWN.value)
+
+        # pp.pprint(data)
 
         return_data = {
             "Uptime": data['value']['Uptime'],
@@ -118,7 +145,8 @@ class CheckApacheMQ(object):
         sys.exit(self.ExitCode.OK.value)
 
     def get_queue_status(self, broker_name, queue_name, warn=None, crit=None):
-
+        """
+        """
         exitcode = self.ExitCode.OK.value
 
         amq_path = "read/org.apache.activemq:type=Broker,brokerName={},destinationType=Queue,destinationName={}".format(
@@ -188,11 +216,33 @@ class CheckApacheMQ(object):
 
     def query_amq(self, url, auth):
         try:
+            print(url)
             req = requests.get(url, auth=auth)
             req.raise_for_status()
             data = json.loads(req.text)
 
             return data
+
+        except RequestException as ex:
+            pp.pprint(ex)
+            return {}
+            # self.log.error("Apache-MQ - CRITICAL \n Could not complete request \n {}".format(ex.message))
+            #sys.exit(self.ExitCode.CRITICAL.value)
+
+        except ConnectionError as ex:
+            pp.pprint(ex)
+            #self.log.error("Apache-MQ - CRITICAL \n Could not connect to service \n {}".format(ex.message))
+            #sys.exit(self.ExitCode.CRITICAL.value)
+
+        except TooManyRedirects as ex:
+            pp.pprint(ex)
+            #self.log.error("Apache-MQ - CRITICAL \n Too many Redirects \n {}".format(ex.message))
+            #sys.exit(self.ExitCode.CRITICAL.value)
+
+        except Timeout as ex:
+            pp.pprint(ex)
+            #self.log.error("Apache-MQ - CRITICAL \ Connection timeout \n {}".format(ex.message))
+            #sys.exit(self.ExitCode.CRITICAL.value)
 
         except (RequestException, ConnectionError, URLRequired, TooManyRedirects, Timeout) as ex:
             self.log.error("Apache-MQ - CRITICAL {}".format(ex.message))
@@ -200,40 +250,92 @@ class CheckApacheMQ(object):
 
 
 if __name__ == '__main__':
-    check = CheckApacheMQ()
 
     parser = argparse.ArgumentParser(
-        formatter_class=argparse.RawTextHelpFormatter
+        formatter_class = argparse.RawTextHelpFormatter
     )
 
-    parser.add_argument('--host', default='http://localhost:8161/api/jolokia/',
-                        help='Host of the Apache-MQ REST service')
-    parser.add_argument('-u', '--username', default='admin', help='Username to be used to login')
-    parser.add_argument('-p', '--password', default='admin', help='Password to be used to login')
+    parser.add_argument(
+        '--url',
+        default='http://localhost:8161/api/jolokia/',
+        help='Host of the Apache-MQ REST service')
 
-    subparsers = parser.add_subparsers(dest='command')
+    parser.add_argument(
+        '--host',
+        default='localhost',
+        help='Host of the Apache-MQ REST service')
 
-    queueu_parser = subparsers.add_parser('queue')
-    queueu_parser.add_argument('-b', '--broker', default='localhost',
-                               help='Brokername used to determine which broker to check. \n Defaults to localhost')
-    queueu_parser.add_argument('-q', '--queue', required=True, help='Queuename which is needed')
-    queueu_parser.add_argument('-c', '--crit', type=int, default=500, help='Critical Value for the Queuesize')
-    queueu_parser.add_argument('-w', '--warn', type=int, default=250, help='Warning Value for the Queuesize')
+    parser.add_argument(
+        '--port',
+        type=int,
+        default=8161,
+        help='Port of the Apache-MQ REST service')
 
-    health_parser = subparsers.add_parser('health')
-    health_parser.add_argument('-b', '--broker', default='localhost',
-                               help='Brokername used to determine which broker to check. \n Defaults to localhost')
+    parser.add_argument(
+        '-u', '--username',
+        default='admin',
+        help='Username to be used to login')
+    parser.add_argument(
+        '-p',
+        '--password',
+        default='admin',
+        help='Password to be used to login')
+
+    parser.add_argument(
+        '--check',
+        required=True,
+        help='health or queue')
 
     args = parser.parse_args()
+    subparsers = parser.add_subparsers(dest='check')
 
-    check.user = args.username
-    check.password = args.password
-    check.host = args.host
+    print(subparsers)
 
-    if args.command == 'queue':
+    if(args.check == 'queue'):
+
+       queueu_parser = subparsers.add_parser('queue')
+
+       queueu_parser.add_argument(
+           '-b', '--broker',
+           default='localhost',
+           help='Brokername used to determine which broker to check. \n Defaults to localhost')
+       queueu_parser.add_argument(
+           '-q', '--queue',
+           required=True,
+           help='Queuename which is needed')
+       queueu_parser.add_argument(
+           '-c', '--crit',
+           type=int,
+           default=500,
+           help='Critical Value for the Queuesize')
+       queueu_parser.add_argument(
+           '-w', '--warn',
+           type=int,
+           default=250,
+           help='Warning Value for the Queuesize')
+    elif(args.check == 'health'):
+
+        #health_parser = subparsers.add_parser('health')
+
+        #print(health_parser)
+
+        parser.add_argument(
+            '-b', '--broker',
+            default='localhost',
+            help='Brokername used to determine which broker to check. \n Defaults to localhost')
+
+
+    check = CheckApacheMQ()
+
+    check.user      = args.username
+    check.password  = args.password
+    check.host      = args.host
+    check.port      = args.port
+
+    if( args.check == 'queue'):
         check.get_queue_status(args.broker, args.queue, args.warn, args.crit)
-    elif args.command == 'health':
+    elif( args.check == 'health'):
         check.get_health_status(args.broker)
     else:
-        print("invalid call! not enough parameters")
+        print("invalid call! not enough parameters (missing queue or health)")
         sys.exit(1)
