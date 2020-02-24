@@ -9,9 +9,6 @@ from types import SimpleNamespace
 
 import requests
 from requests import RequestException, ConnectionError, URLRequired, TooManyRedirects, Timeout
-import pprint
-
-pp = pprint.PrettyPrinter(indent=2)
 
 class CheckApacheMQ(object):
     """docstring for Check_Apache_MQ."""
@@ -25,166 +22,163 @@ class CheckApacheMQ(object):
         CRITICAL = 2
         UNKNOWN = 3
 
-    @property
-    def user(self):
-        return self.__user
+    def __init__(self, host, port, user, password ):
 
-    @user.setter
-    def user(self, user):
-        if user is not None:
-            self.__user = user
-        else:
-            raise ValueError()
-
-    @property
-    def password(self):
-        return self.__password
-
-    @password.setter
-    def password(self, password):
-        if password is not None:
-            self.__password = password
-        else:
-            raise ValueError()
-
-    @property
-    def url(self):
-        return self.__url
-
-    @property
-    def host(self):
-        return self.__host
-
-    @property
-    def port(self):
-        return self.__port
-
-    @host.setter
-    def host(self, host):
-        if host is not None:
-            self.__host = host
-        else:
-            raise ValueError()
-
-    @port.setter
-    def port(self, port):
-        if port is not None:
-            self.__port = port
-        else:
-            raise ValueError()
-
-    def __init__(self, ):
-        self.__url  = None
-        self.__host = None
-        self.__port = None
-        self.__user = None
-        self.__password = None
+        self.host = host
+        self.port = port
+        self.user = user
+        self.password = password
 
         self.log = logging.getLogger('CheckApacheMQ')
         streamhandler = logging.StreamHandler(sys.stdout)
         self.log.addHandler(streamhandler)
         self.log.setLevel(logging.INFO)
 
+
+    def url(self, broker, destination = None):
+        """
+          generates a uniq url
+        """
+        url = "http://{host:}:{port:}/api/jolokia/read/org.apache.activemq:type=Broker,brokerName={broker:}"
+
+        if( destination != None):
+            url += ",destinationType=Queue,destinationName={destination:}"
+
+        url = url.format( host = self.host, port = self.port, broker = broker, destination = destination )
+
+        return url
+
+
     def get_health_status(self, broker_name):
         """
         """
-        url = "http://{host:}:{port:}/api/jolokia".format(host=self.host, port=self.port)
-
-        amq_path = "/read/org.apache.activemq:type=Broker,brokerName={}".format(broker_name)
-
-        data = self.query_amq(url + amq_path, auth=(self.user, self.password))
+        data = self.query_amq( self.url(broker_name) , auth=(self.user, self.password))
 
         if( len(data) == 0 ):
             sys.exit(self.ExitCode.UNKNOWN.value)
 
-        # pp.pprint(data)
+        values = data.get('value', {})
+
+        if( len(values) == 0 ):
+            sys.exit(self.ExitCode.UNKNOWN.value)
+
+        health_uptime            = values.get('Uptime')
+        health_version           = values.get('BrokerVersion')
+        health_store_usage       = values.get('StorePercentUsage', 0)
+        health_memory_usage      = values.get('MemoryPercentUsage', 0)
+        health_total_connections = values.get('TotalConnectionsCount', 0)
+        health_total_dequeue     = values.get('TotalDequeueCount', 0)
+        health_total_enqueue     = values.get('TotalEnqueueCount', 0)
 
         return_data = {
-            "Uptime": data['value']['Uptime'],
-            "BrokerVersion": data['value']['BrokerVersion'],
-            "Store Usage in %": data['value']['StorePercentUsage'],
-            "Memory Usage in %": data['value']['MemoryPercentUsage'],
-            "Total Connections": data['value']['TotalConnectionsCount'],
-            "Total Dequeue Count": data['value']['TotalDequeueCount'],
-            "Total Enqueue Count": data['value']['TotalEnqueueCount']
+            "Uptime": health_uptime,
+            "BrokerVersion": health_version,
+            "Store Usage in %": health_store_usage,
+            "Memory Usage in %": health_memory_usage,
+            "Total Connections": health_total_connections,
+            "Total Dequeue Count": health_total_dequeue,
+            "Total Enqueue Count": health_total_enqueue
         }
 
         perfdata_values = {
-            "Store Usage": SimpleNamespace(value=data['value']['StorePercentUsage'],
-                                           warn="",
-                                           crit="",
-                                           min="",
-                                           max=100),
-            "Memory Usage": SimpleNamespace(value=data['value']['MemoryPercentUsage'],
-                                            warn="",
-                                            crit="",
-                                            min="",
-                                            max=100),
-            "Uptime": SimpleNamespace(value=data['value']['Uptime'],
-                                      warn="",
-                                      crit="",
-                                      min="",
-                                      max=""),
-            "Total Dequeue Count": SimpleNamespace(value=data['value']['TotalDequeueCount'],
-                                                   warn="",
-                                                   crit="",
-                                                   min="",
-                                                   max=""),
-            "Total Enqueue Count": SimpleNamespace(value=data['value']['TotalEnqueueCount'],
-                                                   warn="",
-                                                   crit="",
-                                                   min="",
-                                                   max=""),
+            "Store Usage": SimpleNamespace(
+                value = health_store_usage,
+                warn  = "",
+                crit  = "",
+                min   = "",
+                max   = 100),
+            "Memory Usage": SimpleNamespace(
+                value = health_memory_usage,
+                warn  = "",
+                crit  = "",
+                min   = "",
+                max   = 100),
+            "Uptime": SimpleNamespace(
+                value = health_uptime,
+                warn  = "",
+                crit  = "",
+                min   = "",
+                max   = ""),
+            "Total Dequeue Count": SimpleNamespace(
+                value = health_total_dequeue,
+                warn  = "",
+                crit  = "",
+                min   = "",
+                max   = ""),
+            "Total Enqueue Count": SimpleNamespace(
+                value = health_total_enqueue,
+                warn  = "",
+                crit  = "",
+                min   = "",
+                max   = ""),
         }
 
         return_string = self.build_string(return_data)
 
-        return_string += self.build_perfdata(perfdata_values)
+        # return_string += self.build_perfdata(perfdata_values)
 
         self.log.info(return_string)
         sys.exit(self.ExitCode.OK.value)
+
 
     def get_queue_status(self, broker_name, queue_name, warn=None, crit=None):
         """
         """
         exitcode = self.ExitCode.OK.value
 
-        amq_path = "read/org.apache.activemq:type=Broker,brokerName={},destinationType=Queue,destinationName={}".format(
-            broker_name, queue_name)
-
         # Query values from activeMQ
-        data = self.query_amq(self.host + amq_path, auth=(self.user, self.password))
+        data = self.query_amq(self.url(broker_name, queue_name), auth = ( self.user, self.password ))
+
+        if( len(data) == 0 ):
+            sys.exit(self.ExitCode.UNKNOWN.value)
+
+        values = data.get('value', {})
+
+        if( len(values) == 0 ):
+            sys.exit(self.ExitCode.UNKNOWN.value)
+
+        queue_size              = values.get('QueueSize', 0)
+        queue_producer_count    = values.get('ProducerCount', 0)
+        queue_memory_percent_usage = values.get('MemoryPercentUsage', 0)
+        queue_memory_byte_count = values.get('MemoryUsageByteCount', 0)
+        queue_memory_limit      = values.get('MemoryLimit', 0)
+        queue_messages_avg      = values.get('AverageMessageSize', 0)
+        queue_messages_min      = values.get('MinMessageSize', 0)
+        queue_messages_man      = values.get('MaxMessageSize', 0)
 
         # Building dicts to better build strings
         return_data = {
-            'Queue Size': data['value']['QueueSize'],
-            'Producer count': data['value']['ProducerCount'],
-            'Memory Usage': data['value']['MemoryPercentUsage'],
+            'Queue Size': queue_size,
+            'Producer count': queue_producer_count,
+            'Memory Usage': queue_memory_percent_usage,
         }
 
         perfdata_values = {
-            "Memory Usage": SimpleNamespace(value=data['value']['MemoryUsageByteCount'],
-                                            warn="",
-                                            crit="",
-                                            min="",
-                                            max=data['value']['MemoryLimit']),
-            "Queue Size": SimpleNamespace(value=data['value']['QueueSize'],
-                                          warn=warn,
-                                          crit=crit,
-                                          min="",
-                                          max=""),
-            "Message Size": SimpleNamespace(value=data['value']['AverageMessageSize'],
-                                            warn="",
-                                            crit="",
-                                            min=data['value']['MinMessageSize'],
-                                            max=data['value']['MaxMessageSize']),
+            "Memory Usage": SimpleNamespace(
+                value = queue_memory_byte_count,
+                warn = "",
+                crit = "",
+                min = "",
+                max = queue_memory_limit),
+            "Queue Size": SimpleNamespace(
+                value = queue_size,
+                warn  = warn,
+                crit  = crit,
+                min   = "",
+                max   = ""),
+            "Message Size": SimpleNamespace(
+                value = queue_messages_avg,
+                warn  = "",
+                crit  = "",
+                min   = queue_messages_min,
+                max   = queue_messages_man),
         }
 
         # checking if Queue size exceeds warn or crit values
-        if crit and crit < data['value']['QueueSize']:
+        if crit and crit < queue_size:
             return_string_begin = "Apache-MQ - CRITICAL "
             exitcode = self.ExitCode.CRITICAL.value
-        elif warn and warn < data['value']['QueueSize']:
+        elif warn and warn < queue_size:
             return_string_begin = "Apache-MQ - WARNING "
             exitcode = self.ExitCode.WARNING.value
         else:
@@ -192,10 +186,11 @@ class CheckApacheMQ(object):
 
         return_string = self.build_string(return_data, return_string_begin)
 
-        return_string += self.build_perfdata(perfdata_values)
+        # return_string += self.build_perfdata(perfdata_values)
 
         self.log.info(return_string)
         sys.exit(exitcode)
+
 
     def build_perfdata(self, perfdata_values):
         perfdata_string = " |"
@@ -206,17 +201,18 @@ class CheckApacheMQ(object):
 
         return perfdata_string
 
+
     def build_string(self, string_values, string_begin="Apache-MQ - OK \n"):
         return_string = string_begin
 
         for key, value in string_values.items():
-            return_string += " {}: {} \n".format(key, value)
+            return_string += "  {}: {} \n".format(key, value)
 
         return return_string
 
+
     def query_amq(self, url, auth):
         try:
-            print(url)
             req = requests.get(url, auth=auth)
             req.raise_for_status()
             data = json.loads(req.text)
@@ -224,25 +220,25 @@ class CheckApacheMQ(object):
             return data
 
         except RequestException as ex:
-            pp.pprint(ex)
-            return {}
+            self.log.error(ex)
+            #return {}
             # self.log.error("Apache-MQ - CRITICAL \n Could not complete request \n {}".format(ex.message))
-            #sys.exit(self.ExitCode.CRITICAL.value)
+            sys.exit(self.ExitCode.CRITICAL.value)
 
         except ConnectionError as ex:
-            pp.pprint(ex)
+            self.log.error(ex)
             #self.log.error("Apache-MQ - CRITICAL \n Could not connect to service \n {}".format(ex.message))
-            #sys.exit(self.ExitCode.CRITICAL.value)
+            sys.exit(self.ExitCode.CRITICAL.value)
 
         except TooManyRedirects as ex:
-            pp.pprint(ex)
+            self.log.error(ex)
             #self.log.error("Apache-MQ - CRITICAL \n Too many Redirects \n {}".format(ex.message))
-            #sys.exit(self.ExitCode.CRITICAL.value)
+            sys.exit(self.ExitCode.CRITICAL.value)
 
         except Timeout as ex:
-            pp.pprint(ex)
+            self.log.error(ex)
             #self.log.error("Apache-MQ - CRITICAL \ Connection timeout \n {}".format(ex.message))
-            #sys.exit(self.ExitCode.CRITICAL.value)
+            sys.exit(self.ExitCode.CRITICAL.value)
 
         except (RequestException, ConnectionError, URLRequired, TooManyRedirects, Timeout) as ex:
             self.log.error("Apache-MQ - CRITICAL {}".format(ex.message))
@@ -250,15 +246,11 @@ class CheckApacheMQ(object):
 
 
 if __name__ == '__main__':
+    """
+    """
+    queue_name = None
 
-    parser = argparse.ArgumentParser(
-        formatter_class = argparse.RawTextHelpFormatter
-    )
-
-    parser.add_argument(
-        '--url',
-        default='http://localhost:8161/api/jolokia/',
-        help='Host of the Apache-MQ REST service')
+    parser = argparse.ArgumentParser()
 
     parser.add_argument(
         '--host',
@@ -269,7 +261,7 @@ if __name__ == '__main__':
         '--port',
         type=int,
         default=8161,
-        help='Port of the Apache-MQ REST service')
+        help='Port of the Apache-MQ REST service (default: 8161)')
 
     parser.add_argument(
         '-u', '--username',
@@ -284,58 +276,48 @@ if __name__ == '__main__':
     parser.add_argument(
         '--check',
         required=True,
-        help='health or queue')
+        help = "'health' or 'queue'. \n With 'queue' the '--queue' parameter is required")
+
+    parser.add_argument(
+      '--broker',
+      default = 'localhost',
+      help='Brokername used to determine which broker to check. \n Defaults to localhost')
+
+    parser.add_argument(
+        '-q', '--queue',
+        # required=True,
+        help='Queuename which is required')
+
+    parser.add_argument(
+        '-c', '--crit',
+        type=int,
+        default=500,
+        help='Critical Value for the Queuesize')
+
+    parser.add_argument(
+        '-w', '--warn',
+        type=int,
+        default=250,
+        help='Warning Value for the Queuesize')
 
     args = parser.parse_args()
-    subparsers = parser.add_subparsers(dest='check')
 
-    print(subparsers)
+    broker     = args.broker
+    queue_name = args.queue
+    queue_crit = args.crit
+    queue_warn = args.warn
 
-    if(args.check == 'queue'):
+    if(args.check == 'queue' and queue_name == None):
+        print("missing queue name (--queue)")
+        parser.print_help()
+        sys.exit(1)
 
-       queueu_parser = subparsers.add_parser('queue')
-
-       queueu_parser.add_argument(
-           '-b', '--broker',
-           default='localhost',
-           help='Brokername used to determine which broker to check. \n Defaults to localhost')
-       queueu_parser.add_argument(
-           '-q', '--queue',
-           required=True,
-           help='Queuename which is needed')
-       queueu_parser.add_argument(
-           '-c', '--crit',
-           type=int,
-           default=500,
-           help='Critical Value for the Queuesize')
-       queueu_parser.add_argument(
-           '-w', '--warn',
-           type=int,
-           default=250,
-           help='Warning Value for the Queuesize')
-    elif(args.check == 'health'):
-
-        #health_parser = subparsers.add_parser('health')
-
-        #print(health_parser)
-
-        parser.add_argument(
-            '-b', '--broker',
-            default='localhost',
-            help='Brokername used to determine which broker to check. \n Defaults to localhost')
-
-
-    check = CheckApacheMQ()
-
-    check.user      = args.username
-    check.password  = args.password
-    check.host      = args.host
-    check.port      = args.port
+    check = CheckApacheMQ( args.host, args.port, args.username, args.password )
 
     if( args.check == 'queue'):
-        check.get_queue_status(args.broker, args.queue, args.warn, args.crit)
+        check.get_queue_status(broker, queue_name, queue_warn, queue_crit)
     elif( args.check == 'health'):
-        check.get_health_status(args.broker)
+        check.get_health_status(broker)
     else:
         print("invalid call! not enough parameters (missing queue or health)")
         sys.exit(1)
