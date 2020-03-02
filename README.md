@@ -29,8 +29,9 @@ optional arguments:
 ```
 check_active_mq.py --host $HOST -u $user -p $pass --check health
 
-
 check_active_mq.py --host $HOST -u $user -p $pass --check queue --queue "ActiveMQ.DLQ" --warn 10 --crit 15
+
+check_active_mq.py --host $HOST -u $user -p $pass --check queue --queue "*"
 ```
 
 

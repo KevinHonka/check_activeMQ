@@ -115,8 +115,6 @@ class CheckApacheMQ(object):
 
         return_string = self.build_string(return_data)
 
-        # return_string += self.build_perfdata(perfdata_values)
-
         self.log.info(return_string)
         sys.exit(self.ExitCode.OK.value)
 
@@ -129,89 +127,93 @@ class CheckApacheMQ(object):
         # Query values from activeMQ
         data = self.query_amq(self.url(broker_name, queue_name), auth = ( self.user, self.password ))
 
+        # print(data)
+
         if( len(data) == 0 ):
             sys.exit(self.ExitCode.UNKNOWN.value)
+
+        status = data.get('status')
+
+        if(status != 200):
+            sys.exit(self.ExitCode.CRITICAL.value)
 
         values = data.get('value', {})
 
         if( len(values) == 0 ):
             sys.exit(self.ExitCode.UNKNOWN.value)
 
-        queue_size              = values.get('QueueSize', 0)
-        queue_producer_count    = values.get('ProducerCount', 0)
-        queue_memory_percent_usage = values.get('MemoryPercentUsage', 0)
-        queue_memory_byte_count = values.get('MemoryUsageByteCount', 0)
-        queue_memory_limit      = values.get('MemoryLimit', 0)
-        queue_messages_avg      = values.get('AverageMessageSize', 0)
-        queue_messages_min      = values.get('MinMessageSize', 0)
-        queue_messages_man      = values.get('MaxMessageSize', 0)
+        summary_queue_size = 0
+        return_data = []
 
-        # Building dicts to better build strings
-        return_data = {
-            'Queue Size': queue_size,
-            'Producer count': queue_producer_count,
-            'Memory Usage': queue_memory_percent_usage,
-        }
+        for _name, queue_value in values.items():
+            """
+            """
+            if( _name.startswith("org.apache.activemq") ):
+                """
+                """
+                queue_size              = queue_value.get('QueueSize', 0)
+                queue_producer_count    = queue_value.get('ProducerCount', 0)
+                queue_memory_percent_usage = queue_value.get('MemoryPercentUsage', 0)
 
-        perfdata_values = {
-            "Memory Usage": SimpleNamespace(
-                value = queue_memory_byte_count,
-                warn = "",
-                crit = "",
-                min = "",
-                max = queue_memory_limit),
-            "Queue Size": SimpleNamespace(
-                value = queue_size,
-                warn  = warn,
-                crit  = crit,
-                min   = "",
-                max   = ""),
-            "Message Size": SimpleNamespace(
-                value = queue_messages_avg,
-                warn  = "",
-                crit  = "",
-                min   = queue_messages_min,
-                max   = queue_messages_man),
-        }
+                if(queue_size > 0):
+                    return_data.append({
+                        str(queue_value.get('Name')): {
+                            'Queue Size': queue_size,
+                            'Producer count': queue_producer_count,
+                            'Memory Usage': queue_memory_percent_usage,
+                        }
+                    })
+                summary_queue_size += queue_size
+            else:
+                """
+                """
+                queue_size              = values.get('QueueSize', 0)
+                queue_producer_count    = values.get('ProducerCount', 0)
+                queue_memory_percent_usage = values.get('MemoryPercentUsage', 0)
+
+                return_data.append({
+                    str(values.get('Name')): {
+                        'Queue Size': queue_size,
+                        'Producer count': queue_producer_count,
+                        'Memory Usage': queue_memory_percent_usage,
+                    }
+                })
+                summary_queue_size = queue_size
+                break
 
         # checking if Queue size exceeds warn or crit values
-        if crit and crit < queue_size:
-            return_string_begin = "Apache-MQ - CRITICAL "
+        if crit and crit < summary_queue_size:
+            return_string_begin = "Apache-MQ - CRITICAL"
             exitcode = self.ExitCode.CRITICAL.value
-        elif warn and warn < queue_size:
-            return_string_begin = "Apache-MQ - WARNING "
+        elif warn and warn < summary_queue_size:
+            return_string_begin = "Apache-MQ - WARNING"
             exitcode = self.ExitCode.WARNING.value
         else:
-            return_string_begin = "Apache-MQ - OK \n"
+            return_string_begin = "Apache-MQ - OK"
 
         return_string = self.build_string(return_data, return_string_begin)
-
-        # return_string += self.build_perfdata(perfdata_values)
 
         self.log.info(return_string)
         sys.exit(exitcode)
 
 
-    def build_perfdata(self, perfdata_values):
-        perfdata_string = " |"
+    def build_string(self, string_values, string_begin):
+        """
 
-        for key, values in perfdata_values.items():
-            perfdata_string += " {}={};{};{};{};{}".format(key, values.value, values.warn, values.crit, values.min,
-                                                           values.max)
+        """
+        return_string = string_begin + "\n"
 
-        return perfdata_string
+        for i in string_values:
 
-
-    def build_string(self, string_values, string_begin="Apache-MQ - OK \n"):
-        return_string = string_begin
-
-        for key, value in string_values.items():
-            return_string += "  {}: {} \n".format(key, value)
+            for key, value in i.items():
+                return_string += "  {}: {} \n".format(key, value)
 
         return return_string
 
 
     def query_amq(self, url, auth):
+        """
+        """
         try:
             req = requests.get(url, auth=auth)
             req.raise_for_status()
@@ -291,14 +293,14 @@ if __name__ == '__main__':
     parser.add_argument(
         '-c', '--crit',
         type=int,
-        default=500,
-        help='Critical Value for the Queuesize')
+        default=150,
+        help='Critical Value for the Queuesize (default: 150)')
 
     parser.add_argument(
         '-w', '--warn',
         type=int,
-        default=250,
-        help='Warning Value for the Queuesize')
+        default=50,
+        help='Warning Value for the Queuesize (default: 50)')
 
     args = parser.parse_args()
 
