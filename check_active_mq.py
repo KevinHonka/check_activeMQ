@@ -112,7 +112,7 @@ class CheckApacheMQ(object):
                 max=""),
         }
 
-        return_string = self.build_string(return_data)
+        return_string = self.build_string(return_data, 'Apache-MQ - OK')
 
         self.log.info(return_string)
         sys.exit(self.ExitCode.OK.value)
@@ -200,10 +200,8 @@ class CheckApacheMQ(object):
         """
         return_string = string_begin + "\n"
 
-        for i in string_values:
-
-            for key, value in i.items():
-                return_string += "  {}: {} \n".format(key, value)
+        for key, value in string_values.items():
+            return_string += "  {}: {} \n".format(key, value)
 
         return return_string
 
