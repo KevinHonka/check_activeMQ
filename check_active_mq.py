@@ -204,13 +204,13 @@ class CheckApacheMQ(object):
 
             for i in string_values:
                 for key, value in i.items():
-                    return_string += "  %s<br>" % (key)
+                    return_string += "  %s\n" % (key)
                     for k, v in value.items():
-                        return_string += "    %s: %s<br>" % (k, v)
+                        return_string += "    %s: %s\n" % (k, v)
 
         if isinstance(string_values, dict):
                 for key, value in string_values.items():
-                    return_string += "  %s: %s<br>" % (key, value)
+                    return_string += "  %s: %s \n" % (key, value)
 
         return return_string
 
