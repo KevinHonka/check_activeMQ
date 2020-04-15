@@ -157,8 +157,8 @@ class CheckApacheMQ(object):
                     return_data.append({
                         str(queue_value.get('Name')): {
                             'Queue Size': queue_size,
-                            'Producer count': queue_producer_count,
-                            'Memory Usage': queue_memory_percent_usage,
+                            #'Producer count': queue_producer_count,
+                            #'Memory Usage': queue_memory_percent_usage,
                         }
                     })
                 summary_queue_size += queue_size
@@ -172,8 +172,8 @@ class CheckApacheMQ(object):
                 return_data.append({
                     str(values.get('Name')): {
                         'Queue Size': queue_size,
-                        'Producer count': queue_producer_count,
-                        'Memory Usage': queue_memory_percent_usage,
+                        #'Producer count': queue_producer_count,
+                        #'Memory Usage': queue_memory_percent_usage,
                     }
                 })
                 summary_queue_size = queue_size
@@ -200,8 +200,17 @@ class CheckApacheMQ(object):
         """
         return_string = string_begin + "\n"
 
-        for key, value in string_values.items():
-            return_string += "  {}: {} \n".format(key, value)
+        if isinstance(string_values, list):
+
+            for i in string_values:
+                for key, value in i.items():
+                    return_string += "  %s\n" % (key)
+                    for k, v in value.items():
+                        return_string += "    %s: %s\n" % (k, v)
+
+        if isinstance(string_values, dict):
+                for key, value in string_values.items():
+                    return_string += "  %s: %s \n" % (key, value)
 
         return return_string
 
